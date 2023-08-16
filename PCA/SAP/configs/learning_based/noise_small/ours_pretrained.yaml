@@ -1,0 +1,19 @@
+# inherit_from: configs/learning_based/noise_small/ours.yaml
+# generation:
+#   generation_dir: generation_pretrained
+# test:
+#   model_file: https://s3.eu-central-1.amazonaws.com/avg-projects/shape_as_points/models/ours_noise_005.pt
+
+inherit_from: configs/learning_based/noise_small/ours.yaml
+generation:
+  generation_dir: generation_pretrained
+data:
+  class: ['']
+  # path: data/my_data_nor/bone
+  # path: data/demo/shapenet_chair
+  # path: data/my_train/2
+  path: data_npz/my_try_one/1
+train:
+  out_dir: out/try
+test:
+  model_file: https://s3.eu-central-1.amazonaws.com/avg-projects/shape_as_points/models/ours_noise_005.pt
