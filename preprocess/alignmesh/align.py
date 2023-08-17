@@ -1,15 +1,14 @@
+import pathlib
+
 import numpy as np
-import vtk
 from scipy.spatial import KDTree
 import trimesh
 from scipy.spatial.distance import cdist
 from sklearn.decomposition import PCA
 import tqdm
 import os
-import pathlib
-import glob
 import preprocess.alignmesh.getinfo as getinfo
-from PCA import tools
+import preprocess.alignmesh.tools as tools
 
 
 # 对齐mesh —— nonrigidICPV2
@@ -467,19 +466,18 @@ def alignedAllShape(vertices_list, faces_list, reference_id=0):
 
 # names表示mesh的文件名列表
 def saveMeshes(vertices_list, faces, names, out_dir):
-    suffix = names[0].split('.')[-1]
+    suffix = names[0].split('.')[1]
+    pathlib.Path(out_dir).mkdir(exist_ok=True)
     for i in tqdm.trange(len(vertices_list)):
-        basename = os.path.basename(names[i].replace('.' + suffix, '.ply'))
+        basename = os.path.basename(names[i].replace('.' + suffix, '.obj'))
         mesh = trimesh.Trimesh(vertices_list[i], faces)
         mesh.export(os.path.join(out_dir, basename))
 
 
 def align(from_path, save_path):
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
-
-    names = tools.get(os.listdir(from_path), '.ply', name_only=False)
-    meshes = getinfo.loadMeshes([os.path.join(from_path, name) for name in names])
+    files, names = tools.get_all(from_path, ".ply")
+    meshes = getinfo.loadMeshes(files)
+    print('--- find reference ---')
     reference_id = getinfo.findReferenceMesh(meshes)
     vertices_list = []
     faces_list = []
@@ -496,4 +494,7 @@ def align(from_path, save_path):
     aligned_vertices_list, faces = alignedAllShape(vertices_list, faces_list, reference_id)
     saveMeshes(aligned_vertices_list, faces, names, save_path)
 
-
+if __name__ == "__main__":
+    from_path = "data/pipeline/poisson"
+    save_path = "data/pipeline/align"
+    align(from_path, save_path)
