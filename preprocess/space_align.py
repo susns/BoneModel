@@ -6,7 +6,10 @@ from pycpd import RigidRegistration
 import numpy as np
 import open3d as o3d
 import json
+
+import PCA.tools
 from PCA.tools import distance_RMSE
+from PCA.tools import get
 
 
 def file_filter(f):
@@ -17,8 +20,10 @@ def file_filter(f):
 
 
 def space_align_and_norm(load_path, save_path):
-    names = os.listdir(load_path)
-    names = list(filter(file_filter, names))
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    names = get(os.listdir(load_path), suffix='.txt', name_only=False)
     datas = []
     for name in names:
         data = np.loadtxt(os.path.join(load_path, name), delimiter=' ')
@@ -39,7 +44,7 @@ def space_align_and_norm(load_path, save_path):
 
             datas_align.append(Y_hat)
             scales1.append(s)
-            print(f'{i}/{len(datas)} {name} {time.time()-t0}')
+            print(f'{i}/{len(datas)} {name} {time.time()-t0:>4.2f}s')
 
         mean = np.mean(datas_align, axis=0)
         d = distance_RMSE(template, mean)
@@ -63,9 +68,6 @@ def space_align_and_norm(load_path, save_path):
 
 
 if __name__ == '__main__':
-    load_path = './data/pc/atlas/pelvis'
-    save_path = 'data/pc/atlas/left_5000'
-
-    # load_path = 'data/pc/ly/left'
-    # save_path = 'data/pc/ly/left_1024'
+    load_path = '../data/old/pc'
+    save_path = '../data/old/left'
     space_align_and_norm(load_path, save_path)

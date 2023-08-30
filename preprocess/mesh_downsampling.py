@@ -132,18 +132,18 @@ def down_sampling(from_path, save_path, tri_num=10000, vis=False):
 
 if __name__ == '__main__':
     # 光滑MC提取的表面
-    # fpath = '../data/old/surface'
-    # spath = '../data/old/poisson'
+    # fpath = '../data/new/mesh/surface'
+    # spath = '../data/new/mesh/poisson'
     # smooth(fpath, spath)
 
     # 下采样
-    # fpath = '../data/old/poisson'
-    # spath = '../data/old/sample'
-    # down_sampling(fpath, spath, tri_num=3000)
+    fpath = '../data/new/mesh/poisson'
+    spath = '../data/new/mesh/sample'
+    down_sampling(fpath, spath, tri_num=10012)
 
     # index对齐
-    fpath = '../data/old/sample'
-    spath = '../data/old/align'
-    align(fpath, spath)
+    # fpath = '../data/old/sample'
+    # spath = '../data/old/align'
+    # align(fpath, spath)
 
 
