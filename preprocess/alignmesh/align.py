@@ -478,7 +478,11 @@ def align(from_path, save_path):
     files, names = tools.get_all(from_path, ".ply")
     meshes = getinfo.loadMeshes(files)
     print('--- find reference ---')
-    reference_id = getinfo.findReferenceMesh(meshes)
+    if 'example.ply' in names:
+        reference_id = names.index('example.ply')
+    else:
+        reference_id = getinfo.findReferenceMesh(meshes)
+    print(f'reference {names[reference_id]}')
     vertices_list = []
     faces_list = []
     print('--- extract vertices and faces ---')
@@ -494,7 +498,8 @@ def align(from_path, save_path):
     aligned_vertices_list, faces = alignedAllShape(vertices_list, faces_list, reference_id)
     saveMeshes(aligned_vertices_list, faces, names, save_path)
 
+
 if __name__ == "__main__":
-    from_path = "data/pipeline/poisson"
-    save_path = "data/pipeline/align"
+    from_path = "../../data/new/sample"
+    save_path = "../../data/new/align"
     align(from_path, save_path)

@@ -86,7 +86,7 @@ def findReferenceMesh(meshes):
 
 
 def loadMeshes(mesh_files):
-    suffix = mesh_files[0].split('.')[1]
+    suffix = mesh_files[0].split('.')[-1]
 
     def getReader():
         if suffix == 'vtk':

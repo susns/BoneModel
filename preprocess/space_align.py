@@ -68,6 +68,6 @@ def space_align_and_norm(load_path, save_path):
 
 
 if __name__ == '__main__':
-    load_path = '../data/old/pc'
-    save_path = '../data/old/left'
+    load_path = '../data/new/pc'
+    save_path = '../data/new/left'
     space_align_and_norm(load_path, save_path)

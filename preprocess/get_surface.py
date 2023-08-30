@@ -39,7 +39,7 @@ def get_surface(from_path, save_path, part, vis=False):
 
 
 if __name__ == '__main__':
-    fpath = '../data/old/mhd/40-60 Age/F/mask'
-    spath = '../data/old/surface'
-    p = 23  # left pelvis
+    fpath = '../data/new/mask'
+    spath = '../data/new/surface'
+    p = 1  # left pelvis 23 for old, 1 for new
     get_surface(fpath, spath, p, vis=False)
