@@ -471,6 +471,8 @@ def saveMeshes(vertices_list, faces, names, out_dir):
     for i in tqdm.trange(len(vertices_list)):
         basename = os.path.basename(names[i].replace('.' + suffix, '.obj'))
         mesh = trimesh.Trimesh(vertices_list[i], faces)
+        # 平滑
+        trimesh.smoothing.filter_laplacian(mesh, iterations=10)
         mesh.export(os.path.join(out_dir, basename))
 
 
