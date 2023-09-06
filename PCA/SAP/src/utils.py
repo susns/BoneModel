@@ -499,11 +499,11 @@ def export_mesh(name, v, f):
     mesh.triangles = o3d.utility.Vector3iVector(f)
     o3d.io.write_triangle_mesh(name, mesh)
 
-def scale2onet(p, scale=1.2):
+def scale2onet(p, scale=1):
     '''
     Scale the point cloud from SAP to ONet range
     '''
-    return (p - 0.5) * scale
+    return (p + 0.5) * scale
     
 def update_optimizer(inputs, cfg, epoch, model=None, schedule=None):
     if model is not None:

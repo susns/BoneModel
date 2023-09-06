@@ -8,7 +8,8 @@ from collections import defaultdict
 from PCA.SAP.src import config
 from PCA.SAP.src.dpsr import DPSR
 from PCA.SAP.src.model import Encode2Points
-from PCA.SAP.src.utils import load_config, load_model_manual
+from PCA.SAP.src.utils import load_config, load_model_manual, scale2onet
+
 from tqdm import tqdm
 import open3d as o3d
 
@@ -37,7 +38,9 @@ def toNpz(vertices):
     current_path = get_path()
     points = vertices
     normals = vertices
-    points = [x / 2 for x in points]
+    # 处理方式修改 给定数据为0-1 变为 -0.5-0.5
+    points = [ x - 0.5 for x in points]
+    # points = [x / 2 for x in points]
     if not os.path.exists(os.path.join(current_path, 'data_npz/my_try_one/1/1/')):
         os.makedirs(os.path.join(current_path, 'data_npz/my_try_one/1/1/'))
     np.savez(os.path.join(current_path, 'data_npz/my_try_one/1/1/pointcloud.npz'), points=points, normals=normals)
@@ -81,6 +84,7 @@ def main():
 
     # model配置   cfg是读取的配置文件
     model = Encode2Points(cfg).to(device)
+    # 模型权重文件修改 
     state_dict = torch.load(os.path.join(current_path, 'configs/learning_based/model_best.pt'), map_location='cpu')
     # 将权重读取进模型中
     load_model_manual(state_dict['state_dict'], model)
@@ -120,7 +124,8 @@ def main():
             v = v.detach().cpu().numpy()
             f = f.detach().cpu().numpy()
         mesh = o3d.geometry.TriangleMesh()
-        mesh.vertices = o3d.utility.Vector3dVector(v)
+        # 反向变换
+        mesh.vertices = o3d.utility.Vector3dVector(scale2onet(v))
         mesh.triangles = o3d.utility.Vector3iVector(f)
 
         return mesh
