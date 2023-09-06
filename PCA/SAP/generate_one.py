@@ -39,8 +39,9 @@ def toNpz(vertices):
     points = vertices
     normals = vertices
     # 处理方式修改 给定数据为0-1 变为 -0.5-0.5
-    points = [ x - 0.5 for x in points]
+    # points = [ x - 0.5 for x in points]
     # points = [x / 2 for x in points]
+    points = points / 2
     if not os.path.exists(os.path.join(current_path, 'data_npz/my_try_one/1/1/')):
         os.makedirs(os.path.join(current_path, 'data_npz/my_try_one/1/1/'))
     np.savez(os.path.join(current_path, 'data_npz/my_try_one/1/1/pointcloud.npz'), points=points, normals=normals)
@@ -126,6 +127,8 @@ def main():
         mesh = o3d.geometry.TriangleMesh()
         # 反向变换
         mesh.vertices = o3d.utility.Vector3dVector(scale2onet(v))
+        # mesh.vertices = o3d.utility.Vector3dVector(v)
+
         mesh.triangles = o3d.utility.Vector3iVector(f)
 
         return mesh
