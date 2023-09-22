@@ -4,7 +4,6 @@ import numpy as np
 import pathlib
 from scipy.spatial import KDTree
 
-
 def procrustes(X, Y, scaling=True, reflection='best'):
     n, m = X.shape
     ny, my = Y.shape
@@ -74,33 +73,6 @@ def procrustes(X, Y, scaling=True, reflection='best'):
 
     return d, Z, tform
 
-
-def ICPmanu_allign2(target, source):
-    kdtree1, kdtree2 = KDTree(target), KDTree(source)
-    dis, ids = kdtree1.query(source)
-    IDX1 = np.concatenate((ids[:, np.newaxis], dis[:, np.newaxis]), axis=1)
-    dis, ids = kdtree2.query(target)
-    IDX2 = np.concatenate((ids[:, np.newaxis], dis[:, np.newaxis]), axis=1)
-    IDX1 = np.concatenate((IDX1, np.arange(len(source))[:, np.newaxis]), axis=1)
-    IDX2 = np.concatenate((IDX2, np.arange(len(target))[:, np.newaxis]), axis=1)
-
-    m1 = IDX1.mean(axis=0)[1]
-    s1 = IDX1.std(axis=0)[1]
-    IDX2 = IDX2[IDX2[:, 1] < (m1 + 1.96 * s1)]
-
-    Datasetsource = np.concatenate((source[IDX1[:, 2].astype(int)], source[IDX2[:, 0].astype(int)]))
-    Datasettarget = np.concatenate((target[IDX1[:, 0].astype(int)], target[IDX2[:, 2].astype(int)]))
-    error, Realignedsource, transform = procrustes(Datasettarget, Datasetsource)
-    Reallignedsource = transform['scale'] * source @ transform['rotation'] + np.tile(transform['translation'][:3],
-                                                                                     (len(source), 1))
-    return error, Reallignedsource
-
-def get_pc_from_arr(points):
-    pc = o3d.geometry.PointCloud()
-    pc.points = o3d.utility.Vector3dVector(points)
-    return pc
-
-
 def rigidICP(MEAN, V):
     temp_dir = 'data/temp/'
     pathlib.Path(temp_dir).mkdir(exist_ok=True)
@@ -135,7 +107,6 @@ def rigidICP(MEAN, V):
     # transformd_points = np.asarray(result_pc.points) 在不使用ICP情况下取消注释，用于对比
     _, Reallignedsource, transform = procrustes(transformd_points, V)
     return Reallignedsource, transform
-
 
 # 使用icp算法对齐形状
 def ICPmanu_allignSSM(vnew, MEAN3d, estimate, BTXX, BTXY, BTXZ, nmodes):
@@ -207,7 +178,7 @@ def SSMfitter(MEAN, ssmV, V, nmodes):
     input:
     MEAN: (M, 3)
     ssmV: (3M, n)
-    V:    (M,  3)
+    V:    (M, 3)
     nmodes: scaler
     output:
     EstimatedModes: b
@@ -222,7 +193,8 @@ def SSMfitter(MEAN, ssmV, V, nmodes):
     # MeanParentbone = np.concatenate((MEANX, MEANY, MEANZ), axis=1)
     MeanParentbone = MEAN
     # 应用ICP刚性对齐 对准mean 和 V
-    error, ReallignedVtarget, transform = rigidICP(MeanParentbone, V)
+
+    ReallignedVtarget, transform = rigidICP(MeanParentbone, V)
 
     # 获取X, Y, Z 三个坐标轴的特征向量
     s = MEAN.shape[0]
@@ -253,27 +225,3 @@ def SSMfitter(MEAN, ssmV, V, nmodes):
     position_error = np.sqrt(np.sum((landmarks - SSMfit) ** 2, axis=1))
     RMSerror = np.sqrt(np.mean(position_error))
     return RMSerror, ReallignedV, transform, SSMfit, EstimatedModes, position_error
-
-
-def change_ssmV(origin):
-    '''
-    Args:
-        origin: from OriginPCA::self.p, (n, 3M)
-
-    Returns: used for SSMfitter::ssmV, (3M, n), columns group by x, y, z
-
-    '''
-    n, m = origin.shape
-    i = 0
-    s = int(m/3)
-    BTX = []
-    BTY = []
-    BTZ = []
-    while i < m:
-        BTX.append(origin[:, i])
-        BTY.append(origin[:, i+1])
-        BTZ.append(origin[:, i+2])
-        i += 3
-    BTX, BTY, BTZ = np.array(BTX), np.array(BTY), np.array(BTZ)
-    BTX = np.concatenate((BTX, BTY, BTZ))
-    return BTX
