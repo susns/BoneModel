@@ -1,7 +1,8 @@
+import subprocess
+import open3d as o3d
 import numpy as np
-from sklearn.decomposition import PCA
+import pathlib
 from scipy.spatial import KDTree
-
 
 
 def procrustes(X, Y, scaling=True, reflection='best'):
@@ -94,68 +95,46 @@ def ICPmanu_allign2(target, source):
                                                                                      (len(source), 1))
     return error, Reallignedsource
 
-
-def Preall(target, source):
-    '''
-    执行预先对齐
-    [coeff, score, latent] = pca(data);
-    ==
-    pca = PCA()
-    coeff = pca.fit_transform(data)
-    score = pca.components_
-    latent = pca.explained_variance_
-    '''
-    R = np.array([
-        [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
-        [[1, 0, 0], [0, 1, 0], [0, 0, -1]],
-        [[1, 0, 0], [0, -1, 0], [0, 0, -1]],
-        [[1, 0, 0], [0, -1, 0], [0, 0, 1]],
-        [[-1, 0, 0], [0, 1, 0], [0, 0, 1]],
-        [[-1, 0, 0], [0, 1, 0, ], [0, 0, -1]],
-        [[-1, 0, 0], [0, -1, 0], [0, 0, -1]],
-        [[-1, 0, 0], [0, -1, 0], [0, 0, 1]]
-    ])
-
-    # pca 和 matlab中不一样
-    pca = PCA()
-    Prealligned_source = pca.fit_transform(source)
-    Prealligned_target = pca.fit_transform(target)
-
-    Maxtarget = Prealligned_source.max(axis=0) - Prealligned_source.min(axis=0)
-    Maxsource = Prealligned_target.max(axis=0) - Prealligned_target.min(axis=0)
-    D = Maxtarget / Maxsource
-    D = np.array([[D[0], 0, 0], [0, D[1], 0], [0, 0, D[2]]])
-    RTY = Prealligned_source @ D
-
-    MM = []
-    for T in R:
-        T = RTY @ T
-        kdtree = KDTree(T)
-        DD, bb = kdtree.query(Prealligned_target)
-        MM.append(DD.sum())
-    MM = np.array(MM)
-    M, I = MM.min(), MM.argmin()
-    T = R[I]
-    Prealligned_source = Prealligned_source @ T
-    _, _, transformtarget = procrustes(target, Prealligned_target)
-    return Prealligned_source, Prealligned_target, transformtarget
+def get_pc_from_arr(points):
+    pc = o3d.geometry.PointCloud()
+    pc.points = o3d.utility.Vector3dVector(points)
+    return pc
 
 
-def rigidICP(target, source):
-    Prealligned_source, Prealligned_target, transformtarget = Preall(target, source)
-    error = 0
-    new_error, Reallignedsourcetemp = ICPmanu_allign2(Prealligned_target, Prealligned_source)
+def rigidICP(MEAN, V):
+    temp_dir = 'data/temp/'
+    pathlib.Path(temp_dir).mkdir(exist_ok=True)
 
-    while np.abs(new_error - error) > 0.000001:
-        error = new_error
-        new_error, Reallignedsourcetemp = ICPmanu_allign2(Prealligned_target, Reallignedsourcetemp)
-    error = new_error
-    Reallignedsource = Reallignedsourcetemp @ transformtarget['rotation'] + np.tile(transformtarget['translation'][:3],
-                                                                                    (len(Reallignedsourcetemp), 1))
+    mean_pc = get_pc_from_arr(MEAN)
+    mean_pc_path = temp_dir + 'mean.ply'
+    o3d.io.write_point_cloud(mean_pc_path, mean_pc, write_ascii=True)
 
-    # 先用icp将目标形状计算出来，然后用procrustes计算变换
-    _, Reallignedsource, transform = procrustes(Reallignedsource, source)
-    return error, Reallignedsource, transform
+    v_pc = get_pc_from_arr(V)
+    v_pc_path = temp_dir + 'v.ply'
+    o3d.io.write_point_cloud(v_pc_path, v_pc, write_ascii=True)
+
+    # 将V对齐到mean
+    result_path = temp_dir + 'result.ply'
+    cmd = "sed -i 's/double/float/g' {} {} && Super4PCS -i {} {} -o 1.00 -r {} -n {} -d {}".format(mean_pc_path, v_pc_path, mean_pc_path, v_pc_path, result_path, 1500, 10.00)
+    output = subprocess.check_output(cmd, shell=True)
+    print("fit process output: ", output.decode('utf-8'))
+
+    # ICP2
+    result_pc = o3d.io.read_point_cloud(result_path)
+    trans_init = np.array([[1., 0., 0., 0.],
+                           [0., 1., 0., 0.],
+                           [0., 0., 1., 0.],
+                           [0., 0., 0., 1.]])
+
+
+    icp = o3d.pipelines.registration.registration_icp(
+        result_pc, mean_pc, 10, trans_init,
+        o3d.pipelines.registration.TransformationEstimationPointToPoint())
+    transformd_pc = result_pc.transform(icp.transformation)
+    transformd_points = np.asarray(transformd_pc.points)
+    # transformd_points = np.asarray(result_pc.points) 在不使用ICP情况下取消注释，用于对比
+    _, Reallignedsource, transform = procrustes(transformd_points, V)
+    return Reallignedsource, transform
 
 
 # 使用icp算法对齐形状
