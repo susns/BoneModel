@@ -1,8 +1,9 @@
-import subprocess
-import open3d as o3d
 import numpy as np
-import pathlib
+from sklearn.decomposition import PCA
 from scipy.spatial import KDTree
+import open3d as o3d
+import pathlib
+import subprocess
 
 def procrustes(X, Y, scaling=True, reflection='best'):
     n, m = X.shape
@@ -73,40 +74,90 @@ def procrustes(X, Y, scaling=True, reflection='best'):
 
     return d, Z, tform
 
-def rigidICP(MEAN, V):
-    temp_dir = 'data/temp/'
-    pathlib.Path(temp_dir).mkdir(exist_ok=True)
 
-    mean_pc = get_pc_from_arr(MEAN)
-    mean_pc_path = temp_dir + 'mean.ply'
-    o3d.io.write_point_cloud(mean_pc_path, mean_pc, write_ascii=True)
+def ICPmanu_allign2(target, source):
+    kdtree1, kdtree2 = KDTree(target), KDTree(source)
+    dis, ids = kdtree1.query(source)
+    IDX1 = np.concatenate((ids[:, np.newaxis], dis[:, np.newaxis]), axis=1)
+    dis, ids = kdtree2.query(target)
+    IDX2 = np.concatenate((ids[:, np.newaxis], dis[:, np.newaxis]), axis=1)
+    IDX1 = np.concatenate((IDX1, np.arange(len(source))[:, np.newaxis]), axis=1)
+    IDX2 = np.concatenate((IDX2, np.arange(len(target))[:, np.newaxis]), axis=1)
 
-    v_pc = get_pc_from_arr(V)
-    v_pc_path = temp_dir + 'v.ply'
-    o3d.io.write_point_cloud(v_pc_path, v_pc, write_ascii=True)
+    m1 = IDX1.mean(axis=0)[1]
+    s1 = IDX1.std(axis=0)[1]
+    IDX2 = IDX2[IDX2[:, 1] < (m1 + 1.96 * s1)]
 
-    # 将V对齐到mean
-    result_path = temp_dir + 'result.ply'
-    cmd = "sed -i 's/double/float/g' {} {} && Super4PCS -i {} {} -o 1.00 -r {} -n {} -d {}".format(mean_pc_path, v_pc_path, mean_pc_path, v_pc_path, result_path, 1500, 10.00)
-    output = subprocess.check_output(cmd, shell=True)
-    print("fit process output: ", output.decode('utf-8'))
-
-    # ICP2
-    result_pc = o3d.io.read_point_cloud(result_path)
-    trans_init = np.array([[1., 0., 0., 0.],
-                           [0., 1., 0., 0.],
-                           [0., 0., 1., 0.],
-                           [0., 0., 0., 1.]])
+    Datasetsource = np.concatenate((source[IDX1[:, 2].astype(int)], source[IDX2[:, 0].astype(int)]))
+    Datasettarget = np.concatenate((target[IDX1[:, 0].astype(int)], target[IDX2[:, 2].astype(int)]))
+    error, Realignedsource, transform = procrustes(Datasettarget, Datasetsource)
+    Reallignedsource = transform['scale'] * source @ transform['rotation'] + np.tile(transform['translation'][:3],
+                                                                                     (len(source), 1))
+    return error, Reallignedsource
 
 
-    icp = o3d.pipelines.registration.registration_icp(
-        result_pc, mean_pc, 10, trans_init,
-        o3d.pipelines.registration.TransformationEstimationPointToPoint())
-    transformd_pc = result_pc.transform(icp.transformation)
-    transformd_points = np.asarray(transformd_pc.points)
-    # transformd_points = np.asarray(result_pc.points) 在不使用ICP情况下取消注释，用于对比
-    _, Reallignedsource, transform = procrustes(transformd_points, V)
-    return Reallignedsource, transform
+def Preall(target, source):
+    '''
+    执行预先对齐
+    [coeff, score, latent] = pca(data);
+    ==
+    pca = PCA()
+    coeff = pca.fit_transform(data)
+    score = pca.components_
+    latent = pca.explained_variance_
+    '''
+    R = np.array([
+        [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+        [[1, 0, 0], [0, 1, 0], [0, 0, -1]],
+        [[1, 0, 0], [0, -1, 0], [0, 0, -1]],
+        [[1, 0, 0], [0, -1, 0], [0, 0, 1]],
+        [[-1, 0, 0], [0, 1, 0], [0, 0, 1]],
+        [[-1, 0, 0], [0, 1, 0, ], [0, 0, -1]],
+        [[-1, 0, 0], [0, -1, 0], [0, 0, -1]],
+        [[-1, 0, 0], [0, -1, 0], [0, 0, 1]]
+    ])
+
+    # pca 和 matlab中不一样
+    pca = PCA()
+    Prealligned_source = pca.fit_transform(source)
+    Prealligned_target = pca.fit_transform(target)
+
+    Maxtarget = Prealligned_source.max(axis=0) - Prealligned_source.min(axis=0)
+    Maxsource = Prealligned_target.max(axis=0) - Prealligned_target.min(axis=0)
+    D = Maxtarget / Maxsource
+    D = np.array([[D[0], 0, 0], [0, D[1], 0], [0, 0, D[2]]])
+    RTY = Prealligned_source @ D
+
+    MM = []
+    for T in R:
+        T = RTY @ T
+        kdtree = KDTree(T)
+        DD, bb = kdtree.query(Prealligned_target)
+        MM.append(DD.sum())
+    MM = np.array(MM)
+    M, I = MM.min(), MM.argmin()
+    T = R[I]
+    Prealligned_source = Prealligned_source @ T
+    _, _, transformtarget = procrustes(target, Prealligned_target)
+    return Prealligned_source, Prealligned_target, transformtarget
+
+
+def rigidICP(target, source):
+    Prealligned_source, Prealligned_target, transformtarget = Preall(target, source)
+    error = 0
+    new_error, Reallignedsourcetemp = ICPmanu_allign2(Prealligned_target, Prealligned_source)
+
+    while np.abs(new_error - error) > 0.000001:
+        error = new_error
+        new_error, Reallignedsourcetemp = ICPmanu_allign2(Prealligned_target, Reallignedsourcetemp)
+    error = new_error
+    Reallignedsource = Reallignedsourcetemp @ transformtarget['rotation'] + np.tile(transformtarget['translation'][:3],
+                                                                                    (len(Reallignedsourcetemp), 1))
+
+    # 先用icp将目标形状计算出来，然后用procrustes计算变换
+    _, Reallignedsource, transform = procrustes(Reallignedsource, source)
+    return error, Reallignedsource, transform
+
 
 # 使用icp算法对齐形状
 def ICPmanu_allignSSM(vnew, MEAN3d, estimate, BTXX, BTXY, BTXZ, nmodes):
@@ -193,8 +244,7 @@ def SSMfitter(MEAN, ssmV, V, nmodes):
     # MeanParentbone = np.concatenate((MEANX, MEANY, MEANZ), axis=1)
     MeanParentbone = MEAN
     # 应用ICP刚性对齐 对准mean 和 V
-
-    ReallignedVtarget, transform = rigidICP(MeanParentbone, V)
+    error, ReallignedVtarget, transform = rigidICP(MeanParentbone, V)
 
     # 获取X, Y, Z 三个坐标轴的特征向量
     s = MEAN.shape[0]
@@ -225,3 +275,53 @@ def SSMfitter(MEAN, ssmV, V, nmodes):
     position_error = np.sqrt(np.sum((landmarks - SSMfit) ** 2, axis=1))
     RMSerror = np.sqrt(np.mean(position_error))
     return RMSerror, ReallignedV, transform, SSMfit, EstimatedModes, position_error
+
+
+def change_ssmV(origin):
+    '''
+    Args:
+        origin: from OriginPCA::self.p, (n, 3M)
+
+    Returns: used for SSMfitter::ssmV, (3M, n), columns group by x, y, z
+
+    '''
+    n, m = origin.shape
+    i = 0
+    s = int(m/3)
+    BTX = []
+    BTY = []
+    BTZ = []
+    while i < m:
+        BTX.append(origin[:, i])
+        BTY.append(origin[:, i+1])
+        BTZ.append(origin[:, i+2])
+        i += 3
+    BTX, BTY, BTZ = np.array(BTX), np.array(BTY), np.array(BTZ)
+    BTX = np.concatenate((BTX, BTY, BTZ))
+    return BTX
+
+def get_pc_from_arr(points):
+    pc = o3d.geometry.PointCloud()
+    pc.points = o3d.utility.Vector3dVector(points)
+    return pc
+
+def pre_allign(MEAN, V):
+    temp_dir = 'data/temp/'
+    pathlib.Path(temp_dir).mkdir(exist_ok=True)
+
+    mean_pc = get_pc_from_arr(MEAN)
+    mean_pc_path = temp_dir + 'mean.ply'
+    o3d.io.write_point_cloud(mean_pc_path, mean_pc, write_ascii=True)
+
+    v_pc = get_pc_from_arr(V)
+    v_pc_path = temp_dir + 'v.ply'
+    o3d.io.write_point_cloud(v_pc_path, v_pc, write_ascii=True)
+
+    # 将V对齐到mean
+    result_path = temp_dir + 'result.ply'
+    cmd = "sed -i 's/double/float/g' {} {} && Super4PCS -i {} {} -o 1.00 -r {}".format(mean_pc_path, v_pc_path, mean_pc_path, v_pc_path, result_path)
+    output = subprocess.check_output(cmd, shell=True)
+    print("fit process output: ", output.decode('utf-8'))
+
+    result_pc = o3d.io.read_point_cloud(result_path)
+    return np.asarray(result_pc.points)
