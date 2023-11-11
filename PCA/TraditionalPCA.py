@@ -53,7 +53,7 @@ class TraditionalPCA:
         aY = self.m + np.dot(ab, self.p)
         return aY
 
-    def fit(self, V, nmodes):
+    def fit(self, V, nmodes, args):
         '''
         Args:
             V: (M, 3)
@@ -67,5 +67,5 @@ class TraditionalPCA:
         ssmV = ssmfit.change_ssmV(self.p)
         # ReallignedV 是将V与SSM进行刚性配准后的坐标
         # SSMfit是拟合效果
-        RMSerror, ReallignedV, transform, SSMfit, EstimatedModes, position_error = ssmfit.SSMfitter(MEAN, ssmV, V, nmodes)
+        RMSerror, ReallignedV, transform, SSMfit, EstimatedModes, position_error = ssmfit.SSMfitter(MEAN, ssmV, V, nmodes, args)
         return SSMfit, ReallignedV
