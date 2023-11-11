@@ -1,14 +1,8 @@
+import os
+os.environ['PATH'] = 'OpenGR/build/install/bin:' + os.environ['PATH']
 import json
 import os.path
-
-import open3d as o3d
-import open3d.visualization.gui as gui
-import open3d.visualization.rendering as rendering
 from scipy.spatial.distance import directed_hausdorff
-
-from tools import get_all
-from TraditionalPCA import TraditionalPCA
-import numpy as np
 
 import open3d as o3d
 import open3d.visualization.gui as gui
@@ -35,6 +29,7 @@ class BoneModelVisApp:
         self.pca = None
         self.X = None
         self.path = None
+        self.ssmfit_args = dict()
 
         gui.Application.instance.initialize()
 
@@ -161,13 +156,15 @@ class BoneModelVisApp:
         pannel.add_child(slicer_layout)
         pannel.add_fixed(2 * em)
 
-        # btn_layout = gui.Horiz()
-        # fit_btn = gui.Button('fit')
-        # fit_btn.set_on_clicked(self._on_fit_clicked)
-        # btn_layout.add_stretch()
-        # btn_layout.add_child(fit_btn)
-        # pannel.add_child(btn_layout)
-        # pannel.add_fixed(5 * em)
+        slicer_layout_1 = gui.Horiz()
+        self.d = gui.Slider(gui.Slider.DOUBLE)
+        self.d.set_limits(5, 100)
+        self.d.double_value = 10.0
+        self.d.set_on_value_changed(self._on_d_change)
+        slicer_layout_1.add_child(self.d)
+        self.ssmfit_args['d'] = 10.0
+        pannel.add_child(slicer_layout_1)
+        pannel.add_fixed(0.5 * em)
 
         self._filechoose = gui.TextEdit()
         fit_btn = gui.Button("fit")
@@ -281,6 +278,9 @@ class BoneModelVisApp:
     def _on_v_change(self, v):
         self.update_shape()
 
+    def _on_d_change(self, d):
+        self.ssmfit_args['d'] = self.d.double_value
+
     def _on_reset_button(self):
         self.k.int_value = 1
         self.v.double_value = 0
@@ -370,7 +370,6 @@ class BoneModelVisApp:
                                  self.window.theme)
         filedlg.set_on_cancel(self._on_filedlg_cancel)
         def choose(path):
-            file_path = path
             self._filechoose.text_value = path
             self.window.close_dialog()
 
@@ -381,7 +380,7 @@ class BoneModelVisApp:
             window.add_child(scene)
 
             V = np.loadtxt(path)
-            pc1, pc2 = self.pca.fit(V, 3)
+            pc1, pc2 = self.pca.fit(V, 3, self.ssmfit_args)
 
             p1 = o3d.geometry.PointCloud()
             p1.points = o3d.utility.Vector3dVector(pc1)
